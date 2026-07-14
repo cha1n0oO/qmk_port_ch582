@@ -48,7 +48,7 @@ jobs:
           -DBUILD_WIRELESS_LIB:BOOL=OFF \
           -S${{ github.workspace }} \
           -B${{ github.workspace }}/build
-        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
+          cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
       - name: Get git version
         run: echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
