@@ -34,6 +34,9 @@ jobs:
 
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
+      
+      - name: Check HHKB directory
+        run: ls -la qmk_porting/keyboards/HHKB/
 
       - name: Configure CMake
         # 使用条件表达式：
