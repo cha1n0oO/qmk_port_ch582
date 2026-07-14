@@ -2,8 +2,11 @@ name: Build keyboard firmware
 run-name: Build keyboard firmware
 
 on:
-  push:
-    branches: ["via"]
+  # push:
+  #   branches: ["via"]
+  # pull_request:
+  #   branches: ["via"]
+  # # Allows you to run this workflow manually from the Actions tab or through HTTP API
   workflow_dispatch:
     inputs:
       keyboard:
@@ -17,93 +20,54 @@ on:
         type: string
 
 env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
   build:
+    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
+    # You can convert this to a matrix build if you need cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Fetch all tags
-        run: git fetch --tags
+      - name: Fetch all
+        run: git fetch
 
-      - name: Prepare Submodules (skip private)
-        run: |
-          git submodule sync --recursive
-          git -c submodule."qmk_porting/keyboards_private".update=none submodule update --init --recursive --force
+      - name: Prepare Submodules
+        run: git -c submodule."qmk_porting/keyboards_private".update=none submodule update --recursive --init
 
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
 
-      - name: Create dummy wireless directory for CMake
-        run: |
-          mkdir -p ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/include
-          touch ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/libHHKB.a
-          ls -la ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/
-
       - name: Configure CMake
-        run: |
-          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
-          KEYMAP="${{ github.event_name == 'push' && 'default' || inputs.keymap }}"
-          EXTRA_OPTIONS=""
-          if [ "$KEYBOARD" = "HHKB" ]; then
-            EXTRA_OPTIONS="-DBLE_ENABLE=OFF -DESB_ENABLE=OFF"
-            echo "🔧 Disabling BLE and ESB for HHKB"
-          fi
-          cmake --no-warn-unused-cli \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
-            -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="$KEYBOARD" \
-            -Dkeymap:STRING="$KEYMAP" \
-            -DBUILD_WIRELESS_LIB:BOOL=OFF \
-            $EXTRA_OPTIONS \
-            -S${{ github.workspace }} \
-            -B${{ github.workspace }}/build
+        # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+        # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+        run: cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=${{env.BUILD_TYPE}} -Dkeyboard:STRING=${{inputs.keyboard}} -Dkeymap:STRING=${{inputs.keymap}} -S${{github.workspace}} -B${{github.workspace}}/build
 
       - name: Build
-        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
+        # Build your program with the given configuration
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target all --
 
       - name: Get git version
-        run: |
-          if ! git describe --always --dirty > /dev/null 2>&1; then
-            echo "git_ver=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          else
-            echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
-          fi
+        run: echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
 
-      - name: Copy hex to workspace root
-        run: |
-          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
-          if [ -f "${{ github.workspace }}/build/${KEYBOARD}.hex" ]; then
-            cp "${{ github.workspace }}/build/${KEYBOARD}.hex" "${{ github.workspace }}/"
-            echo "✅ Copied ${KEYBOARD}.hex to root"
-          else
-            echo "⚠️ Hex file not found in build/, listing contents:"
-            ls -la ${{ github.workspace }}/build/
-            exit 1
-          fi
-
-      - name: List build artifacts
-        run: |
-          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
-          echo "Effective keyboard name: $KEYBOARD"
-          echo "=== Files in build/ ==="
-          ls -la ${{ github.workspace }}/build/
-          echo "=== UF2 in root ==="
-          ls -la ${{ github.workspace }}/${KEYBOARD}_upgrade_*.uf2 2>/dev/null || echo "No UF2 found"
-          echo "=== Hex in root ==="
-          ls -la ${{ github.workspace }}/${KEYBOARD}.hex 2>/dev/null || echo "No Hex in root"
-
-      - name: UF2 Firmware
-        uses: actions/upload-artifact@v4
+      - name: UF2 Firmware (${{inputs.keyboard}})
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.uf2
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
+          name: ${{inputs.keyboard}}.uf2
+          path: ${{inputs.keyboard}}_upgrade_${{ env.git_ver }}.uf2
 
-      - name: Hex Firmware
-        uses: actions/upload-artifact@v4
+      - name: Hex Firmware (${{inputs.keyboard}})
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
+          name: ${{inputs.keyboard}}.hex
+          path: ${{inputs.keyboard}}_factory_${{ env.git_ver }}.hex
+
+      # - name: Test
+      #   working-directory: ${{github.workspace}}/build
+      #   # Execute tests defined by the CMake configuration.
+      #   # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      #   run: ctest -C ${{env.BUILD_TYPE}}
