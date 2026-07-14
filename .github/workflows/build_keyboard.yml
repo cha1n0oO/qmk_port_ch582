@@ -48,7 +48,7 @@ jobs:
           cmake --no-warn-unused-cli \
             -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
             -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}" \
+            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
             -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
             -DBUILD_WIRELESS_LIB:BOOL=OFF \
             -S${{ github.workspace }} \
@@ -68,7 +68,7 @@ jobs:
       # 关键：将 Hex 文件复制到根目录，便于上传
       - name: Copy hex to workspace root
         run: |
-          KEYBOARD_NAME="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          KEYBOARD_NAME="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}"
           if [ -f "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" ]; then
             cp "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" "${{ github.workspace }}/"
             echo "✅ Copied ${KEYBOARD_NAME}.hex to root"
@@ -80,7 +80,7 @@ jobs:
 
       - name: List build artifacts
         run: |
-          KEYBOARD_NAME="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          KEYBOARD_NAME="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}"
           echo "Effective keyboard name: $KEYBOARD_NAME"
           echo "=== Files in build/ ==="
           ls -la ${{ github.workspace }}/build/
@@ -92,11 +92,11 @@ jobs:
       - name: UF2 Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.uf2
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
+          name: ${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.uf2
+          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
       - name: Hex Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
+          name: ${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.hex
+          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.hex
