@@ -24,46 +24,61 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # 1. 签出代码并递归拉取所有子模块
+      - uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 2. 获取所有分支/标签（为 git describe 做准备）
       - name: Fetch all
-        run: git fetch
+        run: git fetch --tags
 
+      # 3. 准备子模块（如果 checkout 未完全拉取，额外执行一次）
       - name: Prepare Submodules
-        run: git -c submodule."qmk_porting/keyboards_private".update=none submodule update --recursive --init
+        run: git submodule update --init --recursive --force
 
+      # 4. 安装 Python 依赖
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
-      
-      - name: Check HHKB directory
-        run: ls -la qmk_porting/keyboards/HHKB/
 
+      # 5. 配置 CMake
       - name: Configure CMake
         run: |
           cmake --no-warn-unused-cli \
-          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
-          -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-          -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
-          -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
-          -DBUILD_WIRELESS_LIB:BOOL=OFF \
-          -S${{ github.workspace }} \
-          -B${{ github.workspace }}/build
-          cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
+            -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+            -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
+            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
+            -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
+            -DBUILD_WIRELESS_LIB:BOOL=OFF \
+            -S${{ github.workspace }} \
+            -B${{ github.workspace }}/build
 
+      # 6. 编译
+      - name: Build
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
+
+      # 7. 获取版本号（优先 git describe，失败则用短 hash）
       - name: Get git version
-        run: echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
+        run: |
+          if ! git describe --always --dirty > /dev/null 2>&1; then
+            echo "git_ver=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          else
+            echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
+          fi
 
-      # （可选）调试：列出构建产物，帮助确认实际文件名
+      # 8. 调试：列出构建产物（便于确认实际文件名）
       - name: List build artifacts
         run: ls -la ${{ github.workspace }}/build/
 
+      # 9. 上传 UF2 固件
       - name: UF2 Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.keyboard }}.uf2
-          # 注意：假设固件文件在 build/ 目录下
           path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
+      # 10. 上传 Hex 固件
       - name: Hex Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
