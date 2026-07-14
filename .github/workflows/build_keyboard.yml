@@ -39,19 +39,15 @@ jobs:
         run: ls -la qmk_porting/keyboards/HHKB/
 
       - name: Configure CMake
-        # 使用条件表达式：
-        # 当事件为 push 时，使用固定默认值 "your_default_keyboard" 和 "default"
-        # 当事件为 workflow_dispatch 时，使用用户输入的值
         run: |
           cmake --no-warn-unused-cli \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
-            -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}" \
-            -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
-            -S${{ github.workspace }} \
-            -B${{ github.workspace }}/build
-
-      - name: Build
+          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+          -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
+          -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
+          -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
+          -DBUILD_WIRELESS_LIB:BOOL=OFF \
+          -S${{ github.workspace }} \
+          -B${{ github.workspace }}/build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
       - name: Get git version
