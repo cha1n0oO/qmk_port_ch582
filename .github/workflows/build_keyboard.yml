@@ -24,25 +24,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 签出代码并递归拉取所有子模块
-      - uses: actions/checkout@v5
-        with:
-          submodules: 'recursive'
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # 1. 签出代码（不自动拉取子模块，后面手动处理）
+      - uses: actions/checkout@v4
 
-      # 2. 获取所有分支/标签（为 git describe 做准备）
-      - name: Fetch all
+      # 2. 获取所有标签（用于版本号）
+      - name: Fetch all tags
         run: git fetch --tags
 
-      # 3. 准备子模块（如果 checkout 未完全拉取，额外执行一次）
-      - name: Prepare Submodules
-        run: git submodule update --init --recursive --force
+      # 3. 手动初始化子模块，但跳过 keyboards_private
+      - name: Prepare Submodules (skip private)
+        run: |
+          git submodule sync --recursive
+          git -c submodule."qmk_porting/keyboards_private".update=none submodule update --init --recursive --force
 
       # 4. 安装 Python 依赖
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
 
-      # 5. 配置 CMake
+      # 5. 配置 CMake（禁用无线库）
       - name: Configure CMake
         run: |
           cmake --no-warn-unused-cli \
@@ -58,7 +57,7 @@ jobs:
       - name: Build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
-      # 7. 获取版本号（优先 git describe，失败则用短 hash）
+      # 7. 获取版本号（备用方案）
       - name: Get git version
         run: |
           if ! git describe --always --dirty > /dev/null 2>&1; then
@@ -67,18 +66,18 @@ jobs:
             echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
           fi
 
-      # 8. 调试：列出构建产物（便于确认实际文件名）
+      # 8. 调试：列出构建产物
       - name: List build artifacts
         run: ls -la ${{ github.workspace }}/build/
 
-      # 9. 上传 UF2 固件
+      # 9. 上传 UF2
       - name: UF2 Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.keyboard }}.uf2
           path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
-      # 10. 上传 Hex 固件
+      # 10. 上传 Hex
       - name: Hex Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
