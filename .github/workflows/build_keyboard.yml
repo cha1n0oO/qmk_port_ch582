@@ -46,7 +46,7 @@ jobs:
           cmake --no-warn-unused-cli \
             -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
             -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
+            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}" \
             -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
             -S${{ github.workspace }} \
             -B${{ github.workspace }}/build
