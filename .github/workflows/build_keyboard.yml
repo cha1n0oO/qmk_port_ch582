@@ -24,31 +24,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 签出代码
       - uses: actions/checkout@v4
 
-      # 2. 获取所有标签
       - name: Fetch all tags
         run: git fetch --tags
 
-      # 3. 手动初始化子模块，跳过 keyboards_private
       - name: Prepare Submodules (skip private)
         run: |
           git submodule sync --recursive
           git -c submodule."qmk_porting/keyboards_private".update=none submodule update --init --recursive --force
 
-      # 4. 安装 Python 依赖
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
 
-      # 5. 创建 dummy wireless 目录
       - name: Create dummy wireless directory for CMake
         run: |
           mkdir -p ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/include
           touch ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/libHHKB.a
           ls -la ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/
 
-      # 6. 配置 CMake
       - name: Configure CMake
         run: |
           cmake --no-warn-unused-cli \
@@ -60,11 +54,9 @@ jobs:
             -S${{ github.workspace }} \
             -B${{ github.workspace }}/build
 
-      # 7. 编译
       - name: Build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
-      # 8. 获取版本号
       - name: Get git version
         run: |
           if ! git describe --always --dirty > /dev/null 2>&1; then
@@ -73,25 +65,36 @@ jobs:
             echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
           fi
 
-      # 9. 调试：列出构建产物
+      # 关键：将 Hex 文件复制到根目录，便于上传
+      - name: Copy hex to workspace root
+        run: |
+          KEYBOARD_NAME="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          if [ -f "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" ]; then
+            cp "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" "${{ github.workspace }}/"
+            echo "✅ Copied ${KEYBOARD_NAME}.hex to root"
+          else
+            echo "⚠️ Hex file not found in build/, listing contents:"
+            ls -la ${{ github.workspace }}/build/
+            exit 1
+          fi
+
       - name: List build artifacts
         run: |
-          # 获取有效的键盘名（与 CMake 保持一致）
           KEYBOARD_NAME="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
           echo "Effective keyboard name: $KEYBOARD_NAME"
           echo "=== Files in build/ ==="
           ls -la ${{ github.workspace }}/build/
-          echo "=== Files in workspace root matching $KEYBOARD_NAME ==="
-          ls -la ${{ github.workspace }}/$KEYBOARD_NAME* 2>/dev/null || echo "No matching files"
+          echo "=== UF2 in root ==="
+          ls -la ${{ github.workspace }}/${KEYBOARD_NAME}_upgrade_*.uf2 2>/dev/null || echo "No UF2 found"
+          echo "=== Hex in root ==="
+          ls -la ${{ github.workspace }}/${KEYBOARD_NAME}.hex 2>/dev/null || echo "No Hex in root"
 
-      # 10. 上传 UF2 固件（使用条件默认键盘名）
       - name: UF2 Firmware
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.uf2
           path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
-      # 11. 上传 Hex 固件
       - name: Hex Firmware
         uses: actions/upload-artifact@v4
         with:
