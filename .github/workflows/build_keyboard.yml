@@ -24,14 +24,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 签出代码（不自动拉取子模块，后面手动处理）
+      # 1. 签出代码（不自动拉取子模块，稍后手动处理）
       - uses: actions/checkout@v4
 
       # 2. 获取所有标签（用于版本号）
       - name: Fetch all tags
         run: git fetch --tags
 
-      # 3. 手动初始化子模块，但跳过 keyboards_private
+      # 3. 手动初始化子模块，跳过 keyboards_private
       - name: Prepare Submodules (skip private)
         run: |
           git submodule sync --recursive
@@ -41,23 +41,31 @@ jobs:
       - name: Prepare Python requirements
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
 
-      # 5. 配置 CMake（禁用无线库）
+      # 5. 🔧 创建 dummy wireless 目录，防止 CMake 报错
+      - name: Create dummy wireless directory for CMake
+        run: |
+          mkdir -p ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/include
+          touch ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/libHHKB.a
+          echo "Created dummy wireless directory:"
+          ls -la ${{ github.workspace }}/qmk_porting/keyboards/HHKB/wireless/
+
+      # 6. 配置 CMake（禁用无线库）
       - name: Configure CMake
         run: |
           cmake --no-warn-unused-cli \
             -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
             -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
+            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}" \
             -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
             -DBUILD_WIRELESS_LIB:BOOL=OFF \
             -S${{ github.workspace }} \
             -B${{ github.workspace }}/build
 
-      # 6. 编译
+      # 7. 编译
       - name: Build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
-      # 7. 获取版本号（备用方案）
+      # 8. 获取版本号（备用方案）
       - name: Get git version
         run: |
           if ! git describe --always --dirty > /dev/null 2>&1; then
@@ -66,20 +74,24 @@ jobs:
             echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
           fi
 
-      # 8. 调试：列出构建产物
+      # 9. 调试：列出构建产物（根目录和 build/）
       - name: List build artifacts
-        run: ls -la ${{ github.workspace }}/build/
+        run: |
+          echo "=== Files in build/ ==="
+          ls -la ${{ github.workspace }}/build/
+          echo "=== Files in workspace root ==="
+          ls -la ${{ github.workspace }}/${{ inputs.keyboard }}* 2>/dev/null || echo "No matching files in root"
 
-      # 9. 上传 UF2
+      # 10. 上传 UF2 固件（根目录）
       - name: UF2 Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.keyboard }}.uf2
-          path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
+          path: ${{ github.workspace }}/${{ inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
-      # 10. 上传 Hex
+      # 11. 上传 Hex 固件（根目录）
       - name: Hex Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.keyboard }}.hex
-          path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_factory_${{ env.git_ver }}.hex
+          path: ${{ github.workspace }}/${{ inputs.keyboard }}.hex
