@@ -45,12 +45,20 @@ jobs:
 
       - name: Configure CMake
         run: |
+          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          KEYMAP="${{ github.event_name == 'push' && 'default' || inputs.keymap }}"
+          EXTRA_OPTIONS=""
+          if [ "$KEYBOARD" = "HHKB" ]; then
+            EXTRA_OPTIONS="-DBLE_ENABLE=OFF -DESB_ENABLE=OFF"
+            echo "🔧 Disabling BLE and ESB for HHKB"
+          fi
           cmake --no-warn-unused-cli \
             -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
             -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
-            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
-            -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
+            -Dkeyboard:STRING="$KEYBOARD" \
+            -Dkeymap:STRING="$KEYMAP" \
             -DBUILD_WIRELESS_LIB:BOOL=OFF \
+            $EXTRA_OPTIONS \
             -S${{ github.workspace }} \
             -B${{ github.workspace }}/build
 
@@ -65,13 +73,12 @@ jobs:
             echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
           fi
 
-      # 关键：将 Hex 文件复制到根目录，便于上传
       - name: Copy hex to workspace root
         run: |
-          KEYBOARD_NAME="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}"
-          if [ -f "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" ]; then
-            cp "${{ github.workspace }}/build/${KEYBOARD_NAME}.hex" "${{ github.workspace }}/"
-            echo "✅ Copied ${KEYBOARD_NAME}.hex to root"
+          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          if [ -f "${{ github.workspace }}/build/${KEYBOARD}.hex" ]; then
+            cp "${{ github.workspace }}/build/${KEYBOARD}.hex" "${{ github.workspace }}/"
+            echo "✅ Copied ${KEYBOARD}.hex to root"
           else
             echo "⚠️ Hex file not found in build/, listing contents:"
             ls -la ${{ github.workspace }}/build/
@@ -80,23 +87,23 @@ jobs:
 
       - name: List build artifacts
         run: |
-          KEYBOARD_NAME="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}"
-          echo "Effective keyboard name: $KEYBOARD_NAME"
+          KEYBOARD="${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}"
+          echo "Effective keyboard name: $KEYBOARD"
           echo "=== Files in build/ ==="
           ls -la ${{ github.workspace }}/build/
           echo "=== UF2 in root ==="
-          ls -la ${{ github.workspace }}/${KEYBOARD_NAME}_upgrade_*.uf2 2>/dev/null || echo "No UF2 found"
+          ls -la ${{ github.workspace }}/${KEYBOARD}_upgrade_*.uf2 2>/dev/null || echo "No UF2 found"
           echo "=== Hex in root ==="
-          ls -la ${{ github.workspace }}/${KEYBOARD_NAME}.hex 2>/dev/null || echo "No Hex in root"
+          ls -la ${{ github.workspace }}/${KEYBOARD}.hex 2>/dev/null || echo "No Hex in root"
 
       - name: UF2 Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.uf2
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
+          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.uf2
+          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
 
       - name: Hex Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.hex
-          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}.hex
+          name: ${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
+          path: ${{ github.workspace }}/${{ github.event_name == 'push' && 'imk64' || inputs.keyboard }}.hex
