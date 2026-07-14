@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Fetch all
         run: git fetch
@@ -36,22 +36,37 @@ jobs:
         run: pip3 install -r ./mcuboot/scripts/requirements.txt
 
       - name: Configure CMake
-        run: cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=${{env.BUILD_TYPE}} -Dkeyboard:STRING=${{inputs.keyboard}} -Dkeymap:STRING=${{inputs.keymap}} -S${{github.workspace}} -B${{github.workspace}}/build
+        # 使用条件表达式：
+        # 当事件为 push 时，使用固定默认值 "your_default_keyboard" 和 "default"
+        # 当事件为 workflow_dispatch 时，使用用户输入的值
+        run: |
+          cmake --no-warn-unused-cli \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+            -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} \
+            -Dkeyboard:STRING="${{ github.event_name == 'push' && 'HHKB' || inputs.keyboard }}" \
+            -Dkeymap:STRING="${{ github.event_name == 'push' && 'default' || inputs.keymap }}" \
+            -S${{ github.workspace }} \
+            -B${{ github.workspace }}/build
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target all --
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target all --
 
       - name: Get git version
         run: echo "git_ver=$(git describe --always --dirty)" >> $GITHUB_ENV
 
-      - name: UF2 Firmware (${{inputs.keyboard}})
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{inputs.keyboard}}.uf2
-          path: ${{inputs.keyboard}}_upgrade_${{ env.git_ver }}.uf2
+      # （可选）调试：列出构建产物，帮助确认实际文件名
+      - name: List build artifacts
+        run: ls -la ${{ github.workspace }}/build/
 
-      - name: Hex Firmware (${{inputs.keyboard}})
+      - name: UF2 Firmware (${{ inputs.keyboard }})
         uses: actions/upload-artifact@v4
         with:
-          name: ${{inputs.keyboard}}.hex
-          path: ${{inputs.keyboard}}_factory_${{ env.git_ver }}.hex
+          name: ${{ inputs.keyboard }}.uf2
+          # 注意：假设固件文件在 build/ 目录下
+          path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_upgrade_${{ env.git_ver }}.uf2
+
+      - name: Hex Firmware (${{ inputs.keyboard }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.keyboard }}.hex
+          path: ${{ github.workspace }}/build/${{ inputs.keyboard }}_factory_${{ env.git_ver }}.hex
